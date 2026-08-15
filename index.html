@@ -392,7 +392,7 @@
 
     <div class="map-col">
       <div id="map"></div>
-      <div class="status-bar" id="statusBar">지도를 준비하고 있습니다… (build v5)</div>
+      <div class="status-bar" id="statusBar">지도를 준비하고 있습니다… (build v6)</div>
     </div>
   </div>
 </div>
@@ -550,37 +550,47 @@ async function fetchTop100Mountains(){
 }
 
 // 응답 본문이 JSON인지 XML인지 자동 판별해 item 배열로 변환
+// ★ resultCode 문자열 비교는 기관/포맷마다 표기("00" vs "0" vs 0 등)가 달라
+//   오판 소지가 크므로, "items가 실제로 존재하는지"를 최우선으로 확인합니다.
+//   items가 있으면 무조건 성공으로 처리하고, items가 없을 때만 resultCode로
+//   실패 사유를 설명합니다.
 function parseApiResponse(text){
   const trimmed = text.trim();
   if(trimmed.startsWith("{") || trimmed.startsWith("[")){
     const json = JSON.parse(trimmed);
-    // resultCode가 실패면 오류로 처리
     const header = json?.response?.header ?? json?.header;
-    if(header?.resultCode && !["00","0000","0"].includes(String(header.resultCode))){
-      throw new Error(`API 오류(${header.resultCode}): ${header.resultMsg || ""}`);
-    }
     const body = json?.response?.body ?? json?.body ?? json;
     const itemsNode = body?.items?.item ?? body?.item ?? body?.items ?? [];
-    return (Array.isArray(itemsNode) ? itemsNode : [itemsNode]).filter(Boolean);
+    const items = (Array.isArray(itemsNode) ? itemsNode : [itemsNode]).filter(Boolean);
+    if(items.length > 0) return items; // ★ 데이터가 있으면 resultCode와 무관하게 성공
+    const code = header?.resultCode;
+    const successCodes = ["00","0000","0",0];
+    if(code != null && !successCodes.includes(code) && !successCodes.includes(String(code))){
+      throw new Error(`API 오류(${code}): ${header?.resultMsg || ""}`);
+    }
+    return []; // 정상 응답이지만 목록이 비어 있는 경우
   }
   // XML 파싱
   const xml = new DOMParser().parseFromString(trimmed, "application/xml");
   if(xml.querySelector("parsererror")){
     throw new Error("응답을 해석할 수 없습니다 (JSON/XML 아님).");
   }
+  const itemNodes = Array.from(xml.getElementsByTagName("item"));
+  if(itemNodes.length > 0){
+    return itemNodes.map(node=>{
+      const obj = {};
+      Array.from(node.children).forEach(child=>{
+        obj[child.tagName] = child.textContent;
+      });
+      return obj;
+    });
+  }
   const resultCode = xml.querySelector("resultCode")?.textContent;
   const resultMsg = xml.querySelector("resultMsg")?.textContent;
-  if(resultCode && resultCode !== "00" && resultCode !== "0000"){
+  if(resultCode && !["00","0000","0"].includes(resultCode)){
     throw new Error(`API 오류(${resultCode}): ${resultMsg || ""}`);
   }
-  const itemNodes = Array.from(xml.getElementsByTagName("item"));
-  return itemNodes.map(node=>{
-    const obj = {};
-    Array.from(node.children).forEach(child=>{
-      obj[child.tagName] = child.textContent;
-    });
-    return obj;
-  });
+  return [];
 }
 
 function toMountain(raw){

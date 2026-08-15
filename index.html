@@ -694,9 +694,9 @@ function updateHeaderStat(text){
 /* ============================================================
    6. 마커 / 정보창  ★ 위치 표시는 원이 아닌 "삼각형"으로 렌더링
 ============================================================= */
-function makeTriangleMarkerImage(color){
+function makeTriangleMarkerImage(color, scale = 1){
   // 산 모양을 연상시키는 삼각형 마커(SVG). 꼭짓점이 위, 밑변이 아래.
-  const w = 22, h = 20;
+  const w = Math.round(22 * scale), h = Math.round(20 * scale);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     <polygon points="${w/2},2 ${w-2},${h-2} 2,${h-2}"
       fill="${color}" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
@@ -791,11 +791,26 @@ function renderList(){
   });
 }
 
+// 선택한 산을 강조하기 위해 잠깐 더 크게(펄스) 표시했다가 원래 크기로 되돌립니다.
+function pulseMarker(mtn){
+  if(!mtn.marker) return;
+  const meta = altMeta(mtn.altitude);
+  const bigImage = makeTriangleMarkerImage(meta.color, 1.7);   // 평소보다 큰 삼각형
+  const normalImage = makeTriangleMarkerImage(meta.color, 1);  // 원래 크기
+
+  mtn.marker.setImage(bigImage);
+  mtn.marker.setZIndex(999); // 다른 마커들보다 위로 오도록
+  setTimeout(()=> mtn.marker.setImage(normalImage), 260);
+  setTimeout(()=> mtn.marker.setImage(bigImage), 520);
+  setTimeout(()=> { mtn.marker.setImage(normalImage); mtn.marker.setZIndex(1); }, 780);
+}
+
 function focusMountain(mtn){
   if(mtn.lat == null) return;
   const pos = new kakao.maps.LatLng(mtn.lat, mtn.lng);
-  map.setLevel(7);
-  map.setCenter(pos);
+  map.panTo(pos);          // 부드럽게 중심 이동
+  map.setLevel(3);         // 훨씬 가깝게 확대(레벨 숫자가 작을수록 확대)
+  pulseMarker(mtn);        // 선택된 산 마커를 잠깐 크게 펄스 강조
   if(mtn.marker) openInfo(mtn.marker, mtn.infoContent);
 }
 

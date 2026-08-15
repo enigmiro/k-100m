@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>대한민국 추천여행지 지도</title>
+<title>대한민국 100대 명산 지도</title>
 
 <!-- ============================================================
   카카오맵 JavaScript API 로드
@@ -17,33 +17,45 @@
 </script>
 
 <!-- ============================================================
-  문화체육관광부_추천여행지 오픈API (문화공공데이터광장)
-  참고: https://www.culture.go.kr/data/openapi/openapiView.do?id=581&category=D&gubun=A
-  엔드포인트: data.go.kr "미리보기" 탭에서 직접 확인한 값 (API_CNV_061)
+  한국등산트레킹지원센터_100대명산 목록정보 서비스 (공공데이터포털)
+  참고: https://www.data.go.kr/data/15125127/openapi.do
+  * End Point: https://apis.data.go.kr/B553662/top100FamtListBasiInfoService
+  * 응답 포맷: JSON + XML
+  * 주의: 아래 인증키는 이미 URL 인코딩된 값(%2B, %3D 포함)이므로
+    URLSearchParams로 다시 인코딩하지 말고 문자열로 그대로 붙입니다.
 ============================================================= -->
 <script>
-  const CULTURE_API_KEY = "f782c706-dbe3-4166-86b9-00e1367bbacf";
-  const CULTURE_API_ENDPOINT = "https://api.kcisa.kr/openapi/API_CNV_061/request";
+  const MOUNTAIN_API_KEY =
+    "fkD2xUKQMUIj3Y5d1Wci2oDvC6Zk3zit2cVPLntQbUdNmzqhj3UCpuG0wG%2B7s3bLQRMy5y5TocvCmUaw1pxARw%3D%3D";
+  const MOUNTAIN_API_ENDPOINT =
+    "https://apis.data.go.kr/B553662/top100FamtListBasiInfoService";
+  // 기관별로 오퍼레이션명이 다를 수 있어 흔한 후보를 순서대로 시도합니다.
+  // (성공한 경로는 localStorage에 저장해 다음 방문부터 바로 사용)
+  const OPERATION_CANDIDATES = [
+    "/getTop100FamtListBasiInfoList",
+    "/getTop100FamtListBasiInfo",
+    "/list",
+    "", // 엔드포인트 자체가 오퍼레이션인 경우
+  ];
 </script>
 
 <style>
   :root{
-    /* 여행/축제 분위기에 맞춘 따뜻한 팔레트 */
-    --navy:#1c2b4a;
-    --navy-2:#2c4470;
-    --paper:#fbf6ee;
+    /* 숲/산 분위기의 초록 팔레트 */
+    --forest:#1e4d2b;        /* 짙은 숲 초록 (헤더) */
+    --forest-2:#2e7d43;      /* 밝은 숲 초록 */
+    --paper:#f2f7ef;         /* 연둣빛 배경 */
     --paper-2:#ffffff;
-    --ink:#28211a;
-    --muted:#8a7d6c;
-    --line:#ecdfc9;
+    --ink:#1d2a1f;
+    --muted:#6d8070;
+    --line:#d8e6d4;
 
-    --c-spot:#2a7f8f;        /* 관광지 - 청록 */
-    --c-festival:#e8873a;    /* 축제 - 주황 */
-    --c-food:#c1443c;        /* 맛집 - 붉은빛 */
-    --c-stay:#7a5cb0;        /* 숙박 - 보라 */
-    --c-etc:#5b7a4a;         /* 기타 - 초록 */
+    --c-main:#2e7d43;        /* 명산 기본 - 초록 */
+    --c-high:#175c33;        /* 고도 높은 산 - 짙은 초록 */
+    --c-mid:#5ba05e;         /* 중간 고도 - 중간 초록 */
+    --c-low:#8fbc6f;         /* 낮은 산 - 연초록 */
 
-    --gold:#d99a3d;
+    --accent:#7cb342;        /* 포인트 연두 */
   }
 
   *{box-sizing:border-box;}
@@ -62,18 +74,18 @@
   }
 
   header{
-    background:linear-gradient(120deg, var(--navy), var(--navy-2));
+    background:linear-gradient(120deg, var(--forest), var(--forest-2));
     color:#fff;
     padding:14px 22px;
     display:flex;
     align-items:baseline;
     gap:14px;
-    border-bottom:3px solid var(--gold);
+    border-bottom:3px solid var(--accent);
   }
   header .eyebrow{
     font-size:11px;
     letter-spacing:.14em;
-    color:#c9d4e6;
+    color:#cde5cf;
     font-weight:600;
   }
   header h1{
@@ -86,7 +98,7 @@
   header .stat{
     margin-left:auto;
     font-size:12px;
-    color:#d9e0ee;
+    color:#dcebdc;
     text-align:right;
   }
   header .stat b{color:#fff;}
@@ -125,14 +137,14 @@
     border:1px solid var(--line);
     border-radius:8px;
     font-size:14.5px;
-    background:var(--paper) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%238a7d6c" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>') no-repeat right 12px center;
+    background:var(--paper) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="%236d8070" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>') no-repeat right 12px center;
     appearance:none;
     -webkit-appearance:none;
     color:var(--ink);
     font-weight:600;
     cursor:pointer;
   }
-  select#sidoSelect:focus{outline:2px solid var(--c-spot);outline-offset:1px;}
+  select#sidoSelect:focus{outline:2px solid var(--c-main);outline-offset:1px;}
 
   .search-box{
     display:flex;
@@ -146,7 +158,7 @@
     font-size:14.5px;
     background:var(--paper);
   }
-  .search-box input:focus{outline:2px solid var(--c-spot);outline-offset:1px;}
+  .search-box input:focus{outline:2px solid var(--c-main);outline-offset:1px;}
 
   .legend-row{
     display:flex;
@@ -157,7 +169,13 @@
     color:var(--muted);
   }
   .legend-row span{display:inline-flex;align-items:center;gap:5px;}
-  .legend-row .dot{width:9px;height:9px;border-radius:50%;flex:none;}
+  /* 범례도 지도 마커와 동일하게 삼각형으로 표시 */
+  .legend-row .tri{
+    width:0;height:0;flex:none;
+    border-left:6px solid transparent;
+    border-right:6px solid transparent;
+    border-bottom:10px solid currentColor;
+  }
 
   .list-wrap{
     flex:1;
@@ -189,7 +207,7 @@
     left:50%;
     bottom:16px;
     transform:translateX(-50%);
-    background:rgba(28,43,74,0.92);
+    background:rgba(30,77,43,0.92);
     color:#fff;
     padding:8px 14px;
     border-radius:8px;
@@ -202,10 +220,10 @@
 
   .map-col{position:relative;}
 
-  /* ---- 좌측 하단 고정: 가까운 축제 패널 ---- */
-  .festival-panel{
-    border-top:2px solid var(--gold);
-    background:linear-gradient(180deg, #fff7e9, var(--paper-2));
+  /* ---- 좌측 하단 고정: 가까운 명산 패널 ---- */
+  .near-panel{
+    border-top:2px solid var(--accent);
+    background:linear-gradient(180deg, #eef7e8, var(--paper-2));
     padding:14px 18px 16px;
     flex:none;
     max-height:38%;
@@ -213,28 +231,28 @@
     flex-direction:column;
     min-height:0;
   }
-  .festival-panel h2{
+  .near-panel h2{
     margin:0 0 8px;
     font-size:13px;
     font-weight:800;
-    color:#8a5a1c;
+    color:#2c5a1e;
     display:flex;
     align-items:center;
     gap:6px;
   }
-  .festival-panel .sub{
+  .near-panel .sub{
     font-size:11px;
     color:var(--muted);
     margin:-4px 0 8px;
   }
-  .festival-list{
+  .near-list{
     list-style:none;
     margin:0;
     padding:0;
     overflow-y:auto;
     min-height:0;
   }
-  .festival-list li{
+  .near-list li{
     display:flex;
     align-items:baseline;
     gap:8px;
@@ -247,13 +265,13 @@
     overflow:hidden;
     text-overflow:ellipsis;
   }
-  .festival-list li:hover{background:#fdecd2;}
-  .festival-list li .rank{
+  .near-list li:hover{background:#e2f0d9;}
+  .near-list li .rank{
     flex:none;
     width:18px;
     height:18px;
     border-radius:50%;
-    background:var(--c-festival);
+    background:var(--c-main);
     color:#fff;
     font-size:10px;
     font-weight:700;
@@ -261,26 +279,26 @@
     align-items:center;
     justify-content:center;
   }
-  .festival-list li .fname{
+  .near-list li .fname{
     overflow:hidden;
     text-overflow:ellipsis;
     white-space:nowrap;
     font-weight:600;
   }
-  .festival-list li .fdist{
+  .near-list li .fdist{
     margin-left:auto;
     flex:none;
     font-size:10.5px;
     color:var(--muted);
   }
-  .festival-empty{
+  .near-empty{
     font-size:12px;
     color:var(--muted);
     padding:6px 4px;
   }
 
   ::-webkit-scrollbar{width:8px;}
-  ::-webkit-scrollbar-thumb{background:#e6d6b3;border-radius:8px;}
+  ::-webkit-scrollbar-thumb{background:#c3dbb4;border-radius:8px;}
 
   @media (max-width: 820px){
     header{
@@ -309,7 +327,7 @@
     .list-item{
       font-size:14.5px;
     }
-    .festival-panel{max-height:44%;}
+    .near-panel{max-height:44%;}
   }
 </style>
 </head>
@@ -318,8 +336,8 @@
 <div class="app">
   <header>
     <div>
-      <div class="eyebrow">MINISTRY OF CULTURE, SPORTS AND TOURISM · OPEN DATA</div>
-      <h1><span class="emoji">🗺️</span><a href="/" onclick="location.reload(); return false;" style="color:inherit;text-decoration:none;cursor:pointer;">대한민국 추천여행지 지도</a> <span style="font-weight:400;font-size:12px;color:#c9d4e6;">문화체육관광부_추천여행지 Open API</span></h1>
+      <div class="eyebrow">KOREA MOUNT &amp; TREKKING SUPPORT CENTER · OPEN DATA</div>
+      <h1><span class="emoji">⛰️</span><a href="/" onclick="location.reload(); return false;" style="color:inherit;text-decoration:none;cursor:pointer;">대한민국 100대 명산 지도</a> <span style="font-weight:400;font-size:12px;color:#cde5cf;">한국등산트레킹지원센터_100대명산 목록정보 Open API</span></h1>
     </div>
     <div class="stat" id="headerStat">데이터 불러오는 중…</div>
   </header>
@@ -350,26 +368,24 @@
         </select>
 
         <div class="legend-row">
-          <span><span class="dot" style="background:var(--c-festival)"></span>축제</span>
-          <span><span class="dot" style="background:var(--c-spot)"></span>관광지</span>
-          <span><span class="dot" style="background:var(--c-food)"></span>맛집</span>
-          <span><span class="dot" style="background:var(--c-stay)"></span>숙박</span>
-          <span><span class="dot" style="background:var(--c-etc)"></span>기타</span>
+          <span><span class="tri" style="color:var(--c-high)"></span>1,000m 이상</span>
+          <span><span class="tri" style="color:var(--c-mid)"></span>500~1,000m</span>
+          <span><span class="tri" style="color:var(--c-low)"></span>500m 미만</span>
         </div>
       </div>
 
       <div class="panel">
         <div class="search-box">
-          <input id="searchInput" type="text" placeholder="여행지명으로 검색">
+          <input id="searchInput" type="text" placeholder="산 이름으로 검색 (예: 설악산)">
         </div>
       </div>
 
       <div class="list-wrap" id="listWrap"></div>
 
-      <div class="festival-panel">
-        <h2>🎪 내 주변 가까운 축제</h2>
-        <div class="sub" id="festivalSub">위치를 확인하는 중…</div>
-        <ol class="festival-list" id="festivalList"></ol>
+      <div class="near-panel">
+        <h2>🥾 내 주변 가까운 명산</h2>
+        <div class="sub" id="nearSub">위치를 확인하는 중…</div>
+        <ol class="near-list" id="nearList"></ol>
       </div>
     </aside>
 
@@ -389,23 +405,24 @@ const DEFAULT_ORIGIN = { lat: 37.5665, lng: 126.9780 };
 const INIT_CENTER = { lat: 36.3, lng: 127.8 };
 const INIT_LEVEL = 13; // 전국이 한눈에 보이는 축소 레벨
 
-const TYPE_META = {
-  festival: { color: getCssVarLater("--c-festival"), label: "축제",  emoji: "🎪" },
-  spot:     { color: getCssVarLater("--c-spot"),     label: "관광지", emoji: "📍" },
-  food:     { color: getCssVarLater("--c-food"),     label: "맛집",  emoji: "🍽️" },
-  stay:     { color: getCssVarLater("--c-stay"),     label: "숙박",  emoji: "🏨" },
-  etc:      { color: getCssVarLater("--c-etc"),      label: "기타",  emoji: "✨" },
-};
+// 해발고도 구간별 색상(초록 계열 3단계)
+const ALT_META = [
+  { min: 1000, color: getCssVarLater("--c-high"), label: "1,000m 이상" },
+  { min: 500,  color: getCssVarLater("--c-mid"),  label: "500~1,000m" },
+  { min: -1,   color: getCssVarLater("--c-low"),  label: "500m 미만" },
+];
 function getCssVarLater(name){
-  // 스타일시트 파싱 이후 호출되도록 함수로 감싸 지연 평가
+  // 스타일시트 파싱 이후 호출되도록 지연 평가
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function altMeta(altitude){
+  const alt = Number.isFinite(altitude) ? altitude : 0;
+  return ALT_META.find(m => alt >= m.min) || ALT_META[ALT_META.length - 1];
 }
 
 let map;
-let geocoder;
-let places;
 let activeInfoWindow = null;
-let allSpots = [];          // {title,address,sido,lat,lng,type,marker,...}
+let allMountains = [];      // {name,sido,address,lat,lng,altitude,marker,...}
 let searchTerm = "";
 let selectedSido = "전국";
 let originLatLng = null;    // 사용자 위치(또는 기본 위치)
@@ -421,7 +438,7 @@ function loadKakaoMaps(){
     return;
   }
   const script = document.createElement("script");
-  script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&libraries=services&autoload=false`;
+  script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false`;
   script.onload = ()=> kakao.maps.load(initMap);
   script.onerror = ()=>{
     document.getElementById("statusBar").textContent =
@@ -436,27 +453,24 @@ function initMap(){
     level: INIT_LEVEL,
   });
   map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
-  geocoder = new kakao.maps.services.Geocoder();
-  places = new kakao.maps.services.Places();
   startDataLoad();
 }
 
 /* ============================================================
-   3. 문화체육관광부_추천여행지 오픈API 호출 + 응답 파싱
-   (실제 응답을 확인해보니 이 API는 좌표 필드가 없는 "소개 기사형"
-    데이터입니다 — publisher/creator/title/description/insertDate.
-    제목 끝에 장소명이 붙는 패턴(예: "..., 아산 현충사")을 이용해
-    장소명을 추출한 뒤, 카카오맵 키워드 장소검색으로 좌표와 주소를
-    알아내는 방식으로 지도에 표시합니다.)
+   3. 100대명산 목록정보 오픈API 호출 + 응답 파싱
+   - 이 API는 산식별자/산명/산코드/시도명/주소명/위도/경도/해발고도를
+     직접 내려주므로 별도 지오코딩이 필요 없습니다.
+   - 기관마다 오퍼레이션 경로가 달라 후보를 순서대로 시도하고,
+     성공한 경로는 localStorage에 저장해 재사용합니다.
 ============================================================= */
-const TITLE_KEYS = ["title","TITLE","subject","SUBJECT","cntntsSj","CNTNTS_SJ"];
-const DESC_KEYS  = ["description","DESCRIPTION","cntnts","CNTNTS"];
-const DATE_KEYS  = ["insertDate","INSERT_DATE","regDate","REG_DATE"];
-
-// 지오코딩 요청 개수(=키워드 검색 호출 수)를 제한하기 위한 조회 건수.
-// 카카오 키워드검색을 항목당 1회씩 순차 호출하므로 너무 크면 초기 로딩이
-// 오래 걸립니다. 필요하면 늘려도 되지만 300~500 선을 권장합니다.
-const REQUEST_ROWS = 300;
+// 응답 필드명이 명세에 따라 다를 수 있어 후보 키를 넉넉하게 둡니다.
+const NAME_KEYS = ["mtnNm","mntnNm","mntNm","frtrlNm","mountainNm","name","MNTN_NM"];
+const SIDO_KEYS = ["ctpvNm","sidoNm","ctprvnNm","sido","CTPV_NM"];
+const ADDR_KEYS = ["addrNm","addr","address","lnmAddr","rdnmadr","ADDR_NM"];
+const LAT_KEYS  = ["lat","latitude","mapY","LAT","yCrdnt"];
+const LNG_KEYS  = ["lot","lon","lng","longitude","mapX","LOT","xCrdnt"];
+const ALT_KEYS  = ["aslAltide","altitude","hg","mntHeight","ASL_ALTIDE","seaLvlAltd"];
+const CODE_KEYS = ["mtnCd","mntnCd","mntCd","frtrlCd","MNTN_CD"];
 
 function pick(obj, keys){
   for(const k of keys){
@@ -467,74 +481,34 @@ function pick(obj, keys){
   return "";
 }
 
-// 응답 필드는 HTML 엔티티가 이중으로 이스케이프되어 있어(&amp;nbsp; 등)
-// 두 번 디코딩한 뒤 태그를 제거합니다.
-function decodeEntitiesTwice(s){
-  const decodeOnce = (str)=>{
-    const ta = document.createElement("textarea");
-    ta.innerHTML = str;
-    return ta.value;
-  };
-  return decodeOnce(decodeOnce(s || ""));
-}
-function stripHtml(s){
-  return decodeEntitiesTwice(s).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-}
+async function fetchTop100Mountains(){
+  const savedOp = localStorage.getItem("top100ApiOperation");
+  const candidates = savedOp != null
+    ? [savedOp, ...OPERATION_CANDIDATES.filter(c => c !== savedOp)]
+    : OPERATION_CANDIDATES;
 
-// 제목 끝의 장소명 추출: "악동에서 영웅으로... 아산 현충사" → "아산 현충사"
-function extractPlaceName(title){
-  const parts = title.split(",");
-  const last = parts[parts.length - 1].trim();
-  return last.length >= 2 ? last : title.trim();
-}
-
-async function fetchRecommendedTravelSpots(){
-  const params = new URLSearchParams({
-    serviceKey: CULTURE_API_KEY,
-    numOfRows: String(REQUEST_ROWS),
-    pageNo: "1",
-  });
-  const requestUrl = `${CULTURE_API_ENDPOINT}?${params.toString()}`;
-
-  // 주의: 커스텀 헤더(Content-type 등)를 붙이면 브라우저가 CORS 사전요청
-  // (OPTIONS)을 먼저 보내는데, 일부 공공기관 서버는 이에 제대로 응답하지
-  // 않아 "Failed to fetch"가 발생할 수 있습니다. GET 요청에는 굳이 필요
-  // 없으므로 헤더 없이 단순 요청(simple request)으로 호출합니다.
-  let res;
-  try{
-    res = await fetch(requestUrl);
-  }catch(networkErr){
-    console.error("네트워크/CORS 오류:", networkErr, requestUrl);
-    throw new Error("네트워크 요청이 브라우저 단계에서 차단되었습니다(CORS 또는 접속 불가). " +
-      "개발자도구 Network 탭에서 이 요청의 상태를 확인해주세요.");
+  let lastErr = null;
+  for(const op of candidates){
+    // 인증키는 이미 인코딩된 값이므로 문자열로 그대로 연결합니다.
+    const requestUrl = `${MOUNTAIN_API_ENDPOINT}${op}` +
+      `?serviceKey=${MOUNTAIN_API_KEY}&pageNo=1&numOfRows=200&type=json&_type=json`;
+    try{
+      const res = await fetch(requestUrl);
+      if(!res.ok){ lastErr = new Error(`HTTP ${res.status} (${op || "루트"})`); continue; }
+      const text = await res.text();
+      console.log(`[100대명산 API] 시도 경로: "${op}" / 응답 앞 300자:`, text.slice(0, 300));
+      const items = parseApiResponse(text);
+      if(items.length > 0){
+        localStorage.setItem("top100ApiOperation", op);
+        return items;
+      }
+      lastErr = new Error(`응답은 정상이지만 목록이 비어 있음 (${op || "루트"})`);
+    }catch(err){
+      lastErr = err;
+    }
   }
-  if(!res.ok) throw new Error(`추천여행지 API 응답 오류: HTTP ${res.status}`);
-  const text = await res.text();
-
-  console.log("[추천여행지 API] 응답 원문(앞 500자):", text.slice(0, 500));
-
-  const rawItems = parseApiResponse(text);
-  console.log("[추천여행지 API] 파싱된 원본 항목 수:", rawItems.length,
-    rawItems[0] ? "/ 첫 항목 키:" : "", rawItems[0] ? Object.keys(rawItems[0]) : "");
-
-  return rawItems.map(raw=>{
-    const rawTitle = pick(raw, TITLE_KEYS) || "(제목 없음)";
-    const rawDesc = pick(raw, DESC_KEYS);
-    return {
-      title: rawTitle,
-      description: stripHtml(rawDesc),
-      insertDate: pick(raw, DATE_KEYS),
-      placeName: extractPlaceName(rawTitle),
-    };
-  });
-}
-
-function classifyType(title, description){
-  const text = (title + " " + description);
-  if(/축제|페스티벌|불꽃|연등|박람회/.test(text)) return "festival";
-  if(/맛집|음식|먹거리|식당/.test(text)) return "food";
-  if(/숙박|호텔|펜션|리조트|게스트하우스/.test(text)) return "stay";
-  return "spot"; // 이 데이터셋은 기본적으로 추천 "여행지" 소개 글이므로 관광지를 기본값으로 둠
+  throw new Error("모든 오퍼레이션 경로 시도 실패: " + (lastErr ? lastErr.message : "원인 불명") +
+    " — data.go.kr 활용명세(Swagger)에서 정확한 오퍼레이션명을 확인해 OPERATION_CANDIDATES에 추가해주세요.");
 }
 
 // 응답 본문이 JSON인지 XML인지 자동 판별해 item 배열로 변환
@@ -542,19 +516,24 @@ function parseApiResponse(text){
   const trimmed = text.trim();
   if(trimmed.startsWith("{") || trimmed.startsWith("[")){
     const json = JSON.parse(trimmed);
+    // resultCode가 실패면 오류로 처리
+    const header = json?.response?.header ?? json?.header;
+    if(header?.resultCode && !["00","0000"].includes(String(header.resultCode))){
+      throw new Error(`API 오류(${header.resultCode}): ${header.resultMsg || ""}`);
+    }
     const body = json?.response?.body ?? json?.body ?? json;
     const itemsNode = body?.items?.item ?? body?.item ?? body?.items ?? [];
-    return Array.isArray(itemsNode) ? itemsNode : [itemsNode];
+    return (Array.isArray(itemsNode) ? itemsNode : [itemsNode]).filter(Boolean);
   }
   // XML 파싱
   const xml = new DOMParser().parseFromString(trimmed, "application/xml");
   if(xml.querySelector("parsererror")){
-    throw new Error("추천여행지 API 응답을 해석할 수 없습니다 (JSON/XML 아님).");
+    throw new Error("응답을 해석할 수 없습니다 (JSON/XML 아님).");
   }
   const resultCode = xml.querySelector("resultCode")?.textContent;
   const resultMsg = xml.querySelector("resultMsg")?.textContent;
   if(resultCode && resultCode !== "00" && resultCode !== "0000"){
-    throw new Error(`추천여행지 API 오류(${resultCode}): ${resultMsg || ""}`);
+    throw new Error(`API 오류(${resultCode}): ${resultMsg || ""}`);
   }
   const itemNodes = Array.from(xml.getElementsByTagName("item"));
   return itemNodes.map(node=>{
@@ -566,70 +545,23 @@ function parseApiResponse(text){
   });
 }
 
-/* ============================================================
-   3-1. 카카오맵 키워드 장소검색으로 지오코딩
-   (이 API에는 좌표가 없으므로, 추출한 장소명을 카카오 로컬 검색에
-    넘겨 좌표·주소·시도를 알아냅니다. 결과는 localStorage에 캐시해
-    다음 방문 시 재요청을 줄입니다.)
-============================================================= */
-function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-
-function keywordSearchOnce(keyword){
-  return new Promise(resolve=>{
-    places.keywordSearch(keyword, (data, status)=>{
-      if(status === kakao.maps.services.Status.OK && data && data[0]){
-        resolve(data[0]);
-      }else{
-        resolve(null);
-      }
-    });
-  });
-}
-
-async function resolveCoordinates(articles, statusBar){
-  const cache = JSON.parse(localStorage.getItem("placeGeocodeCache") || "{}");
-  const spots = [];
-
-  for(let i = 0; i < articles.length; i++){
-    const a = articles[i];
-    statusBar.textContent = `장소 위치 확인 중… (${i+1}/${articles.length}) ${a.placeName}`;
-
-    if(!(a.placeName in cache)){
-      const found = await keywordSearchOnce(a.placeName);
-      cache[a.placeName] = found ? {
-        lat: parseFloat(found.y),
-        lng: parseFloat(found.x),
-        address: found.road_address_name || found.address_name || "",
-        sido: (found.address_name || "").split(" ")[0] || "",
-        placeLabel: found.place_name || a.placeName,
-      } : null;
-      await sleep(140); // 실제로 카카오에 호출한 경우에만 살짝 대기(과호출 방지)
-    }
-
-    const geo = cache[a.placeName];
-    if(geo && Number.isFinite(geo.lat) && Number.isFinite(geo.lng)){
-      const spot = {
-        title: a.title,
-        description: a.description,
-        address: geo.address,
-        sido: geo.sido,
-        lat: geo.lat,
-        lng: geo.lng,
-        insertDate: a.insertDate,
-        type: classifyType(a.title, a.description),
-        placeLabel: geo.placeLabel,
-      };
-      spots.push(spot);
-      placeMarker(spot); // 찾는 즉시 지도에 바로 표시(점진적 렌더링)
-    }
-  }
-
-  localStorage.setItem("placeGeocodeCache", JSON.stringify(cache));
-  return spots;
+function toMountain(raw){
+  const lat = parseFloat(pick(raw, LAT_KEYS));
+  const lng = parseFloat(pick(raw, LNG_KEYS));
+  if(!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const altitude = parseFloat(pick(raw, ALT_KEYS));
+  return {
+    name: pick(raw, NAME_KEYS) || "(이름 없음)",
+    code: pick(raw, CODE_KEYS),
+    sido: pick(raw, SIDO_KEYS),
+    address: pick(raw, ADDR_KEYS),
+    altitude: Number.isFinite(altitude) ? Math.round(altitude) : null,
+    lat, lng,
+  };
 }
 
 /* ============================================================
-   4. 위치 확인 (가까운 축제 정렬 기준)
+   4. 위치 확인 (가까운 명산 정렬 기준)
 ============================================================= */
 function resolveOrigin(){
   return new Promise(resolve=>{
@@ -667,13 +599,12 @@ function distanceKm(a, b){
 async function startDataLoad(){
   const statusBar = document.getElementById("statusBar");
   try{
-    statusBar.textContent = "문화체육관광부 추천여행지 목록을 불러오는 중…";
-    const [articles, origin] = await Promise.all([
-      fetchRecommendedTravelSpots().catch(err=>{
+    statusBar.textContent = "100대 명산 목록을 불러오는 중…";
+    const [rawItems, origin] = await Promise.all([
+      fetchTop100Mountains().catch(err=>{
         console.error(err);
         apiLoadFailed = true;
-        statusBar.textContent = "⚠️ 추천여행지 API 호출 실패: " + err.message +
-          " — 상단 CULTURE_API_ENDPOINT 값을 확인해주세요.";
+        statusBar.textContent = "⚠️ 100대명산 API 호출 실패: " + err.message;
         return [];
       }),
       resolveOrigin(),
@@ -681,25 +612,27 @@ async function startDataLoad(){
 
     originLatLng = origin;
 
-    if(!apiLoadFailed && articles.length > 0){
-      // 장소명을 카카오 키워드검색으로 순차 지오코딩(진행률을 상태바에 표시)
-      allSpots = await resolveCoordinates(articles, statusBar);
+    if(!apiLoadFailed){
+      allMountains = rawItems.map(toMountain).filter(Boolean);
+      allMountains.sort((a,b)=> a.name.localeCompare(b.name, "ko"));
+      allMountains.forEach(placeMarker);
     }
 
     if(apiLoadFailed){
       // 이미 catch에서 status 메시지를 세팅함
-    }else if(articles.length === 0){
+    }else if(rawItems.length === 0){
       statusBar.textContent = "⚠️ API 응답은 받았지만 목록이 0개입니다. " +
-        "개발자도구(F12) 콘솔의 [추천여행지 API] 로그를 확인해주세요.";
-    }else if(allSpots.length === 0){
-      statusBar.textContent = "⚠️ 장소명은 받았지만 카카오 장소검색에서 좌표를 찾지 못했습니다.";
+        "개발자도구(F12) 콘솔의 [100대명산 API] 로그를 확인해주세요.";
+    }else if(allMountains.length === 0){
+      statusBar.textContent = "⚠️ 목록은 받았지만 위도/경도 필드를 찾지 못했습니다. " +
+        "콘솔에서 첫 항목의 키 이름을 확인해 LAT_KEYS/LNG_KEYS에 추가해주세요.";
+      console.log("[100대명산 API] 첫 항목:", rawItems[0]);
     }else{
       statusBar.classList.add("hidden");
     }
-    updateHeaderStat(`총 ${allSpots.length}개 추천여행지 표시 중` +
-      (articles.length > allSpots.length ? ` (조회 ${articles.length}건 중 위치 확인 성공)` : ""));
+    updateHeaderStat(`총 <b>${allMountains.length}</b>개 명산 표시 중`);
     renderList();
-    renderNearbyFestivals();
+    renderNearbyMountains();
   }catch(err){
     console.error(err);
     statusBar.textContent = "데이터를 불러오는 중 오류가 발생했습니다: " + err.message;
@@ -711,50 +644,47 @@ function updateHeaderStat(text){
 }
 
 /* ============================================================
-   6. 마커 / 정보창
+   6. 마커 / 정보창  ★ 위치 표시는 원이 아닌 "삼각형"으로 렌더링
 ============================================================= */
-function makeMarkerImage(color){
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18">
-    <circle cx="9" cy="9" r="7" fill="${color}" stroke="#ffffff" stroke-width="2"/>
+function makeTriangleMarkerImage(color){
+  // 산 모양을 연상시키는 삼각형 마커(SVG). 꼭짓점이 위, 밑변이 아래.
+  const w = 22, h = 20;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polygon points="${w/2},2 ${w-2},${h-2} 2,${h-2}"
+      fill="${color}" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
   </svg>`;
   const src = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
-  return new kakao.maps.MarkerImage(src, new kakao.maps.Size(18,18), {
-    offset: new kakao.maps.Point(9,9)
+  return new kakao.maps.MarkerImage(src, new kakao.maps.Size(w, h), {
+    // 삼각형 밑변 중앙이 실제 좌표를 가리키도록 오프셋 지정
+    offset: new kakao.maps.Point(w/2, h-2)
   });
 }
 
-function placeMarker(spot){
-  const meta = TYPE_META[spot.type];
+function placeMarker(mtn){
+  const meta = altMeta(mtn.altitude);
   const marker = new kakao.maps.Marker({
-    position: new kakao.maps.LatLng(spot.lat, spot.lng),
+    position: new kakao.maps.LatLng(mtn.lat, mtn.lng),
     map,
-    title: spot.title,
-    image: makeMarkerImage(meta.color),
+    title: mtn.name,
+    image: makeTriangleMarkerImage(meta.color),
   });
 
-  const shortDesc = spot.description
-    ? (spot.description.length > 90 ? spot.description.slice(0, 90) + "…" : spot.description)
-    : "";
-  const descLine = shortDesc
-    ? `<div style="font-size:12px;color:#555;margin-top:4px;max-width:260px;white-space:normal;line-height:1.5;">${shortDesc}</div>`
-    : "";
-  const dateLine = spot.insertDate
-    ? `<div style="font-size:11px;color:#a5620f;margin-top:4px;white-space:nowrap;">📅 등록일 ${spot.insertDate}</div>`
+  const altLine = mtn.altitude != null
+    ? `<div style="font-size:12px;color:#2c5a1e;margin-top:2px;white-space:nowrap;">⛰️ 해발 ${mtn.altitude.toLocaleString()}m (${meta.label})</div>`
     : "";
   const content = `
     <div style="font-family:inherit;padding:10px 14px;">
-      <div style="font-weight:700;font-size:14px;margin-bottom:4px;white-space:nowrap;">${meta.emoji} ${spot.placeLabel || spot.title}</div>
-      <div style="font-size:12px;color:#555;margin-bottom:2px;white-space:nowrap;">${meta.label}${spot.sido ? " · " + spot.sido : ""}</div>
-      <div style="font-size:12px;color:#555;margin-bottom:2px;white-space:nowrap;">${spot.address}</div>
-      ${descLine}
-      ${dateLine}
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;white-space:nowrap;">🌲 ${mtn.name}</div>
+      <div style="font-size:12px;color:#555;margin-bottom:2px;white-space:nowrap;">${mtn.sido || ""}</div>
+      <div style="font-size:12px;color:#555;margin-bottom:2px;white-space:nowrap;">${mtn.address || ""}</div>
+      ${altLine}
     </div>`;
 
   kakao.maps.event.addListener(marker, "click", ()=> openInfo(marker, content));
 
-  spot.marker = marker;
-  spot.infoContent = content;
-  applyVisibility(spot);
+  mtn.marker = marker;
+  mtn.infoContent = content;
+  applyVisibility(mtn);
 }
 
 function openInfo(marker, content){
@@ -772,94 +702,85 @@ function normalizeSido(s){
   return (s || "").replace(/(특별자치시|특별자치도|광역시|특별시|자치도|^세종$)/g, "").trim();
 }
 
-function matchesSido(spot){
+function matchesSido(mtn){
   if(selectedSido === "전국") return true;
-  const a = normalizeSido(spot.sido);
+  // 시도명 필드가 비어있으면 주소로도 판별
+  const src = mtn.sido || mtn.address || "";
+  const a = normalizeSido(src.split(" ")[0]);
   const b = normalizeSido(selectedSido);
   if(!a) return false;
-  return a.includes(b) || b.includes(a);
+  return a.includes(b) || b.includes(a) || src.includes(b);
 }
 
-function applyVisibility(spot){
-  if(!spot.marker) return;
-  const matchesSearch = !searchTerm || spot.title.includes(searchTerm);
-  spot.marker.setMap((matchesSido(spot) && matchesSearch) ? map : null);
+function applyVisibility(mtn){
+  if(!mtn.marker) return;
+  const matchesSearch = !searchTerm || mtn.name.includes(searchTerm);
+  mtn.marker.setMap((matchesSido(mtn) && matchesSearch) ? map : null);
 }
 
 function renderList(){
   const wrap = document.getElementById("listWrap");
   wrap.innerHTML = "";
-  const visible = allSpots.filter(s => matchesSido(s) && (!searchTerm || s.title.includes(searchTerm)));
+  const visible = allMountains.filter(m => matchesSido(m) && (!searchTerm || m.name.includes(searchTerm)));
 
   if(visible.length === 0){
-    wrap.innerHTML = `<div class="festival-empty" style="padding:14px 18px;">표시할 여행지가 없습니다.</div>`;
+    wrap.innerHTML = `<div class="near-empty" style="padding:14px 18px;">표시할 명산이 없습니다.</div>`;
     return;
   }
 
-  visible.forEach(spot=>{
-    const meta = TYPE_META[spot.type];
+  visible.forEach(mtn=>{
+    const meta = altMeta(mtn.altitude);
+    const altText = mtn.altitude != null ? `${mtn.altitude.toLocaleString()}m` : "고도 미상";
     const item = document.createElement("div");
     item.className = "list-item";
     item.innerHTML = `
-      <span class="tag" style="background:${meta.color}">${meta.emoji} ${meta.label}</span>
-      <div class="name" style="display:inline">${spot.title}</div>
-      <div class="meta">${spot.sido ? spot.sido + " · " : ""}${spot.address}</div>
+      <span class="tag" style="background:${meta.color}">▲ ${altText}</span>
+      <div class="name" style="display:inline">${mtn.name}</div>
+      <div class="meta">${mtn.sido ? mtn.sido + " · " : ""}${mtn.address || ""}</div>
     `;
-    item.addEventListener("click", ()=> focusSpot(spot));
+    item.addEventListener("click", ()=> focusMountain(mtn));
     wrap.appendChild(item);
   });
 }
 
-function focusSpot(spot){
-  if(spot.lat == null) return;
-  const pos = new kakao.maps.LatLng(spot.lat, spot.lng);
-  map.setLevel(5);
+function focusMountain(mtn){
+  if(mtn.lat == null) return;
+  const pos = new kakao.maps.LatLng(mtn.lat, mtn.lng);
+  map.setLevel(7);
   map.setCenter(pos);
-  if(spot.marker) openInfo(spot.marker, spot.infoContent);
+  if(mtn.marker) openInfo(mtn.marker, mtn.infoContent);
 }
 
 /* ============================================================
-   8. 좌측 하단: 가까운 축제 목록 (최초 로딩 시 1회 계산)
+   8. 좌측 하단: 가까운 명산 목록 (최초 로딩 시 1회 계산)
 ============================================================= */
-function renderNearbyFestivals(){
-  const sub = document.getElementById("festivalSub");
-  const listEl = document.getElementById("festivalList");
+function renderNearbyMountains(){
+  const sub = document.getElementById("nearSub");
+  const listEl = document.getElementById("nearList");
   listEl.innerHTML = "";
 
-  let festivals = allSpots.filter(s => s.type === "festival");
-  let usedFallback = false;
-
-  // 데이터에 '축제'로 분류된 항목이 없다면(필드 구조가 예상과 다를 경우 대비),
-  // 전체 추천여행지 중 가까운 순으로 대체 표시합니다.
-  if(festivals.length === 0){
-    festivals = allSpots;
-    usedFallback = true;
-  }
-
-  if(festivals.length === 0){
+  if(allMountains.length === 0){
     sub.textContent = apiLoadFailed
       ? "데이터를 불러오지 못했습니다."
       : "표시할 데이터가 없습니다.";
     return;
   }
 
-  const withDist = festivals.map(s=>({
-    spot: s,
-    dist: distanceKm(originLatLng, { lat: s.lat, lng: s.lng }),
+  const withDist = allMountains.map(m=>({
+    mtn: m,
+    dist: distanceKm(originLatLng, { lat: m.lat, lng: m.lng }),
   })).sort((a,b)=> a.dist - b.dist).slice(0, 10);
 
-  sub.textContent = usedFallback
-    ? "축제 분류를 찾지 못해 가까운 추천여행지로 대체 표시합니다."
-    : "현재 위치에서 가까운 순입니다.";
+  sub.textContent = "현재 위치에서 가까운 순입니다.";
 
   withDist.forEach((row, idx)=>{
     const li = document.createElement("li");
     li.innerHTML = `
       <span class="rank">${idx+1}</span>
-      <span class="fname">${row.spot.title}</span>
+      <span class="fname">${row.mtn.name}</span>
       <span class="fdist">${row.dist.toFixed(1)}km</span>
     `;
-    li.addEventListener("click", ()=> focusSpot(row.spot));
+    li.addEventListener("click", ()=> focusMountain(row.mtn));
     listEl.appendChild(li);
   });
 }
@@ -869,13 +790,13 @@ function renderNearbyFestivals(){
 ============================================================= */
 document.getElementById("sidoSelect").addEventListener("change", (e)=>{
   selectedSido = e.target.value;
-  allSpots.forEach(applyVisibility);
+  allMountains.forEach(applyVisibility);
   renderList();
 });
 
 document.getElementById("searchInput").addEventListener("input", (e)=>{
   searchTerm = e.target.value.trim();
-  allSpots.forEach(applyVisibility);
+  allMountains.forEach(applyVisibility);
   renderList();
 });
 

@@ -50,10 +50,10 @@
     --muted:#6d8070;
     --line:#d8e6d4;
 
-    --c-main:#2e7d43;        /* 명산 기본 - 초록 */
-    --c-high:#175c33;        /* 고도 높은 산 - 짙은 초록 */
-    --c-mid:#5ba05e;         /* 중간 고도 - 중간 초록 */
-    --c-low:#8fbc6f;         /* 낮은 산 - 연초록 */
+    --c-main:#e07b39;        /* 명산 기본 - 주황(지도 위 대비용) */
+    --c-high:#a8341b;        /* 고도 높은 산 - 짙은 적갈색 */
+    --c-mid:#e0792a;         /* 중간 고도 - 주황 */
+    --c-low:#f2c14e;         /* 낮은 산 - 노랑 */
 
     --accent:#7cb342;        /* 포인트 연두 */
   }
@@ -220,6 +220,19 @@
   .status-bar.hidden{display:none;}
 
   .map-col{position:relative;}
+
+  /* 산 클릭 시 뜨는 설명박스(커스텀 오버레이). 화면 밖으로 넘치지 않도록
+     max-width를 제한하고, 다른 마커보다 항상 위에 보이도록 z-index를 높게 둡니다. */
+  .mtn-info{
+    background:#fff;
+    border-radius:10px;
+    box-shadow:0 8px 22px rgba(20,40,20,0.28);
+    padding:11px 15px;
+    max-width:min(280px, 78vw);
+    position:relative;
+    z-index:9999;
+    pointer-events:auto;
+  }
 
   /* ---- 좌측 하단 고정: 가까운 명산 패널 ---- */
   .near-panel{
@@ -392,7 +405,7 @@
 
     <div class="map-col">
       <div id="map"></div>
-      <div class="status-bar" id="statusBar">지도를 준비하고 있습니다… (build v7)</div>
+      <div class="status-bar" id="statusBar">지도를 준비하고 있습니다… (build v8)</div>
     </div>
   </div>
 </div>
@@ -422,7 +435,8 @@ function altMeta(altitude){
 }
 
 let map;
-let activeInfoWindow = null;
+let activeOverlay = null;      // 현재 열려있는 설명 오버레이(커스텀)
+let activeOverlayMtn = null;   // 현재 오버레이가 열려있는 산
 let allMountains = [];      // {name,sido,address,lat,lng,altitude,marker,...}
 let searchTerm = "";
 let selectedSido = "전국";
@@ -695,16 +709,23 @@ function updateHeaderStat(text){
    6. 마커 / 정보창  ★ 위치 표시는 원이 아닌 "삼각형"으로 렌더링
 ============================================================= */
 function makeTriangleMarkerImage(color, scale = 1){
-  // 산 모양을 연상시키는 삼각형 마커(SVG). 꼭짓점이 위, 밑변이 아래.
-  const w = Math.round(22 * scale), h = Math.round(20 * scale);
+  // 산 모양을 연상시키는 삼각형 마커. 지도 배경(특히 초록/올리브 지형)에 묻히지
+  // 않도록 흰색 halo(윤곽선) + 그림자 + 진한 테두리를 추가해 대비를 강화합니다.
+  const w = Math.round(26 * scale), h = Math.round(24 * scale);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-    <polygon points="${w/2},2 ${w-2},${h-2} 2,${h-2}"
-      fill="${color}" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
+    <defs>
+      <filter id="shadow" x="-60%" y="-60%" width="220%" height="220%">
+        <feDropShadow dx="0" dy="1.2" stdDeviation="1.3" flood-color="#000" flood-opacity="0.4"/>
+      </filter>
+    </defs>
+    <polygon points="${w/2},1 ${w-1},${h-1} 1,${h-1}" fill="#ffffff" filter="url(#shadow)"/>
+    <polygon points="${w/2},5 ${w-5},${h-3} 5,${h-3}"
+      fill="${color}" stroke="#2b1608" stroke-width="1.3" stroke-linejoin="round"/>
   </svg>`;
   const src = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
   return new kakao.maps.MarkerImage(src, new kakao.maps.Size(w, h), {
-    // 삼각형 밑변 중앙이 실제 좌표를 가리키도록 오프셋 지정
-    offset: new kakao.maps.Point(w/2, h-2)
+    // 흰색 바깥 삼각형의 밑변 중앙이 실제 좌표를 가리키도록 오프셋 지정
+    offset: new kakao.maps.Point(w/2, h-1)
   });
 }
 
@@ -718,29 +739,71 @@ function placeMarker(mtn){
   });
 
   const altLine = mtn.altitude != null
-    ? `<div style="font-size:12px;color:#2c5a1e;margin-top:2px;white-space:nowrap;">⛰️ 해발 ${mtn.altitude.toLocaleString()}m (${meta.label})</div>`
+    ? `<div style="font-size:12px;color:#2c5a1e;margin-top:2px;">⛰️ 해발 ${mtn.altitude.toLocaleString()}m (${meta.label})</div>`
     : "";
   const content = `
-    <div style="font-family:inherit;padding:10px 14px;">
-      <div style="font-weight:700;font-size:14px;margin-bottom:4px;white-space:nowrap;">🌲 ${mtn.name}</div>
-      <div style="font-size:12px;color:#555;margin-bottom:2px;white-space:nowrap;">${mtn.sido || ""}</div>
-      <div style="font-size:12px;color:#555;margin-bottom:2px;white-space:nowrap;">${mtn.address || ""}</div>
+    <div style="font-family:inherit;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">🌲 ${mtn.name}</div>
+      <div style="font-size:12px;color:#555;margin-bottom:2px;">${mtn.sido || ""}</div>
+      <div style="font-size:12px;color:#555;margin-bottom:2px;">${mtn.address || ""}</div>
       ${altLine}
     </div>`;
 
-  kakao.maps.event.addListener(marker, "click", ()=> openInfo(marker, content));
+  kakao.maps.event.addListener(marker, "click", ()=> toggleInfo(mtn));
 
   mtn.marker = marker;
   mtn.infoContent = content;
   applyVisibility(mtn);
 }
 
-function openInfo(marker, content){
-  if(!activeInfoWindow){
-    activeInfoWindow = new kakao.maps.InfoWindow({ removable: true });
+// 산 클릭 시: 이미 열려있는 산을 다시 클릭하면 닫고(토글),
+// 다른 산을 클릭하면 기존 것을 닫은 뒤 새로 엽니다.
+function toggleInfo(mtn){
+  if(activeOverlayMtn === mtn){
+    closeInfo();
+    return;
   }
-  activeInfoWindow.setContent(content);
-  activeInfoWindow.open(map, marker);
+  closeInfo();
+  openInfo(mtn);
+}
+
+function closeInfo(){
+  if(activeOverlay){
+    activeOverlay.setMap(null);
+    activeOverlay = null;
+    activeOverlayMtn = null;
+  }
+}
+
+// 마커 화면상 위치를 계산해, 설명박스가 지도 밖으로 나가지 않도록
+// 좌/우, 상/하 기준점(anchor)을 자동으로 뒤집어 줍니다.
+function computeAnchor(mtn){
+  const mapEl = document.getElementById("map");
+  const w = mapEl.offsetWidth, h = mapEl.offsetHeight;
+  const proj = map.getProjection();
+  const pt = proj.containerPointFromCoords(new kakao.maps.LatLng(mtn.lat, mtn.lng));
+  // xAnchor: 0=박스 왼쪽 끝이 마커 위치(오른쪽으로 펼쳐짐), 1=박스 오른쪽 끝이 마커 위치(왼쪽으로 펼쳐짐)
+  const xAnchor = pt.x > w * 0.62 ? 1 : (pt.x < w * 0.38 ? 0 : 0.5);
+  // yAnchor: 1=박스가 마커 위쪽에 펼쳐짐(기본), 0=마커가 화면 위쪽에 가까우면 아래로 펼쳐짐
+  const yAnchor = pt.y < h * 0.32 ? 0 : 1;
+  return { xAnchor, yAnchor };
+}
+
+function openInfo(mtn){
+  const { xAnchor, yAnchor } = computeAnchor(mtn);
+  const el = document.createElement("div");
+  el.className = "mtn-info";
+  el.innerHTML = mtn.infoContent;
+
+  activeOverlay = new kakao.maps.CustomOverlay({
+    position: new kakao.maps.LatLng(mtn.lat, mtn.lng),
+    content: el,
+    xAnchor,
+    yAnchor,
+    zIndex: 9999, // 다른 산 마커들보다 항상 위에 표시
+  });
+  activeOverlay.setMap(map);
+  activeOverlayMtn = mtn;
 }
 
 /* ============================================================
@@ -826,7 +889,8 @@ function focusMountain(mtn){
   map.panTo(pos);          // 부드럽게 중심 이동
   map.setLevel(3);         // 훨씬 가깝게 확대(레벨 숫자가 작을수록 확대)
   pulseMarker(mtn);        // 선택된 산 마커를 잠깐 크게 펄스 강조
-  if(mtn.marker) openInfo(mtn.marker, mtn.infoContent);
+  closeInfo();
+  openInfo(mtn);
 }
 
 /* ============================================================

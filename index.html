@@ -851,10 +851,34 @@ function renderNearbyMountains(){
 /* ============================================================
    9. 이벤트 바인딩
 ============================================================= */
+// 지역(시도) 선택 시, 그 지역에 속한 명산들이 모두 보이도록 지도를 이동/확대합니다.
+function moveMapToSido(){
+  if(!map) return;
+  if(selectedSido === "전국"){
+    map.setLevel(INIT_LEVEL);
+    map.panTo(new kakao.maps.LatLng(INIT_CENTER.lat, INIT_CENTER.lng));
+    return;
+  }
+  const inRegion = allMountains.filter(matchesSido);
+  if(inRegion.length === 0) return; // 해당 지역에 표시할 산이 없으면 지도는 그대로 둠
+
+  if(inRegion.length === 1){
+    // 산이 하나뿐이면 bounds 대신 해당 지점으로 適度히 확대
+    map.setLevel(6);
+    map.panTo(new kakao.maps.LatLng(inRegion[0].lat, inRegion[0].lng));
+    return;
+  }
+
+  const bounds = new kakao.maps.LatLngBounds();
+  inRegion.forEach(m => bounds.extend(new kakao.maps.LatLng(m.lat, m.lng)));
+  map.setBounds(bounds); // 지역 내 모든 산이 한눈에 들어오도록 자동 확대/이동
+}
+
 document.getElementById("sidoSelect").addEventListener("change", (e)=>{
   selectedSido = e.target.value;
   allMountains.forEach(applyVisibility);
   renderList();
+  moveMapToSido();
 });
 
 document.getElementById("searchInput").addEventListener("input", (e)=>{

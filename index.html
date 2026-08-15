@@ -405,7 +405,7 @@
 
     <div class="map-col">
       <div id="map"></div>
-      <div class="status-bar" id="statusBar">지도를 준비하고 있습니다… (build v8)</div>
+      <div class="status-bar" id="statusBar">지도를 준비하고 있습니다… (build v9)</div>
     </div>
   </div>
 </div>
@@ -781,22 +781,32 @@ function computeAnchor(mtn){
   const mapEl = document.getElementById("map");
   const w = mapEl.offsetWidth, h = mapEl.offsetHeight;
   const proj = map.getProjection();
-  const pt = proj.containerPointFromCoords(new kakao.maps.LatLng(mtn.lat, mtn.lng));
+  const basePt = proj.containerPointFromCoords(new kakao.maps.LatLng(mtn.lat, mtn.lng));
+
   // xAnchor: 0=박스 왼쪽 끝이 마커 위치(오른쪽으로 펼쳐짐), 1=박스 오른쪽 끝이 마커 위치(왼쪽으로 펼쳐짐)
-  const xAnchor = pt.x > w * 0.62 ? 1 : (pt.x < w * 0.38 ? 0 : 0.5);
-  // yAnchor: 1=박스가 마커 위쪽에 펼쳐짐(기본), 0=마커가 화면 위쪽에 가까우면 아래로 펼쳐짐
-  const yAnchor = pt.y < h * 0.32 ? 0 : 1;
-  return { xAnchor, yAnchor };
+  const xAnchor = basePt.x > w * 0.62 ? 1 : (basePt.x < w * 0.38 ? 0 : 0.5);
+  // showBelow: 마커가 화면 위쪽에 가까우면 박스를 아래로, 아니면 위로(기본) 펼침
+  const showBelow = basePt.y < h * 0.32;
+  const yAnchor = showBelow ? 0 : 1;
+
+  // ★ 삼각형 마커가 가려지지 않도록, 박스의 기준 좌표 자체를 화면 픽셀
+  // 기준으로 마커 높이만큼 위(또는 아래)로 밀어냅니다(실제 산 좌표는 그대로 두고
+  // 설명박스만 살짝 띄워서 표시).
+  const GAP_PX = 30;
+  const shiftedPt = new kakao.maps.Point(basePt.x, basePt.y + (showBelow ? GAP_PX : -GAP_PX));
+  const position = proj.coordsFromContainerPoint(shiftedPt);
+
+  return { xAnchor, yAnchor, position };
 }
 
 function openInfo(mtn){
-  const { xAnchor, yAnchor } = computeAnchor(mtn);
+  const { xAnchor, yAnchor, position } = computeAnchor(mtn);
   const el = document.createElement("div");
   el.className = "mtn-info";
   el.innerHTML = mtn.infoContent;
 
   activeOverlay = new kakao.maps.CustomOverlay({
-    position: new kakao.maps.LatLng(mtn.lat, mtn.lng),
+    position,
     content: el,
     xAnchor,
     yAnchor,
@@ -887,7 +897,7 @@ function focusMountain(mtn){
   if(mtn.lat == null) return;
   const pos = new kakao.maps.LatLng(mtn.lat, mtn.lng);
   map.panTo(pos);          // 부드럽게 중심 이동
-  map.setLevel(3);         // 훨씬 가깝게 확대(레벨 숫자가 작을수록 확대)
+  map.setLevel(5);         // 주변 위치가 함께 보이도록 적당히 확대(레벨 숫자가 작을수록 확대)
   pulseMarker(mtn);        // 선택된 산 마커를 잠깐 크게 펄스 강조
   closeInfo();
   openInfo(mtn);

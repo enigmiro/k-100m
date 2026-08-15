@@ -392,7 +392,7 @@
 
     <div class="map-col">
       <div id="map"></div>
-      <div class="status-bar" id="statusBar">지도를 준비하고 있습니다… (build v6)</div>
+      <div class="status-bar" id="statusBar">지도를 준비하고 있습니다… (build v7)</div>
     </div>
   </div>
 </div>
@@ -746,8 +746,23 @@ function openInfo(marker, content){
 /* ============================================================
    7. 지역(시도) / 검색 필터
 ============================================================= */
+// 신/구 지역명이 섞여 있어도(예: "전라북도" ↔ "전북특별자치도") 매칭되도록
+// 대표 2글자 지역코드로 정규화합니다.
+const SIDO_ALIASES = [
+  ["서울"], ["부산"], ["대구"], ["인천"], ["광주"], ["대전"], ["울산"], ["세종"],
+  ["경기"], ["강원"], ["충북","충청북"], ["충남","충청남"],
+  ["전북","전라북"], ["전남","전라남"], ["경북","경상북"], ["경남","경상남"], ["제주"],
+];
 function normalizeSido(s){
-  return (s || "").replace(/(특별자치시|특별자치도|광역시|특별시|자치도|^세종$)/g, "").trim();
+  const raw = (s || "").replace(/(특별자치시|특별자치도|광역시|특별시|자치도|도|시)$/,"").trim();
+  const stripped = (s || "").replace(/(특별자치시|특별자치도|광역시|특별시|자치도)/g, "").trim();
+  const candidate = stripped || raw;
+  for(const group of SIDO_ALIASES){
+    if(group.some(alias => candidate.startsWith(alias) || alias.startsWith(candidate))){
+      return group[0];
+    }
+  }
+  return candidate;
 }
 
 function matchesSido(mtn){
@@ -757,7 +772,7 @@ function matchesSido(mtn){
   const a = normalizeSido(src.split(" ")[0]);
   const b = normalizeSido(selectedSido);
   if(!a) return false;
-  return a.includes(b) || b.includes(a) || src.includes(b);
+  return a === b;
 }
 
 function applyVisibility(mtn){
@@ -853,25 +868,39 @@ function renderNearbyMountains(){
 ============================================================= */
 // 지역(시도) 선택 시, 그 지역에 속한 명산들이 모두 보이도록 지도를 이동/확대합니다.
 function moveMapToSido(){
-  if(!map) return;
-  if(selectedSido === "전국"){
-    map.setLevel(INIT_LEVEL);
-    map.panTo(new kakao.maps.LatLng(INIT_CENTER.lat, INIT_CENTER.lng));
-    return;
-  }
-  const inRegion = allMountains.filter(matchesSido);
-  if(inRegion.length === 0) return; // 해당 지역에 표시할 산이 없으면 지도는 그대로 둠
+  try{
+    if(!map){ console.warn("[지역이동] map 객체가 아직 준비되지 않음"); return; }
+    console.log("[지역이동] 선택된 시도:", selectedSido);
 
-  if(inRegion.length === 1){
-    // 산이 하나뿐이면 bounds 대신 해당 지점으로 適度히 확대
-    map.setLevel(6);
-    map.panTo(new kakao.maps.LatLng(inRegion[0].lat, inRegion[0].lng));
-    return;
-  }
+    if(selectedSido === "전국"){
+      map.setLevel(INIT_LEVEL);
+      map.panTo(new kakao.maps.LatLng(INIT_CENTER.lat, INIT_CENTER.lng));
+      console.log("[지역이동] 전국 뷰로 복귀");
+      return;
+    }
+    const inRegion = allMountains.filter(matchesSido);
+    console.log(`[지역이동] "${selectedSido}"에 해당하는 산 개수:`, inRegion.length,
+      inRegion.slice(0,5).map(m=>m.name));
 
-  const bounds = new kakao.maps.LatLngBounds();
-  inRegion.forEach(m => bounds.extend(new kakao.maps.LatLng(m.lat, m.lng)));
-  map.setBounds(bounds); // 지역 내 모든 산이 한눈에 들어오도록 자동 확대/이동
+    if(inRegion.length === 0){
+      console.warn("[지역이동] 해당 지역에 일치하는 산이 없어 지도를 이동하지 않음");
+      return;
+    }
+
+    if(inRegion.length === 1){
+      map.setLevel(6);
+      map.panTo(new kakao.maps.LatLng(inRegion[0].lat, inRegion[0].lng));
+      console.log("[지역이동] 산 1개 → 해당 위치로 이동 완료");
+      return;
+    }
+
+    const bounds = new kakao.maps.LatLngBounds();
+    inRegion.forEach(m => bounds.extend(new kakao.maps.LatLng(m.lat, m.lng)));
+    map.setBounds(bounds);
+    console.log("[지역이동] bounds 적용 완료");
+  }catch(err){
+    console.error("[지역이동] 오류 발생:", err);
+  }
 }
 
 document.getElementById("sidoSelect").addEventListener("change", (e)=>{

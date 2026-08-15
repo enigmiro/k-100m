@@ -215,6 +215,7 @@
     z-index:5;
     max-width:90%;
     text-align:center;
+    white-space:pre-line;
   }
   .status-bar.hidden{display:none;}
 
@@ -513,11 +514,12 @@ async function fetchTop100Mountains(){
     ? [savedOp, ...OPERATION_CANDIDATES.filter(c => c !== savedOp)]
     : OPERATION_CANDIDATES;
 
-  let lastErr = null;
+  const attemptLogs = []; // 모든 시도의 결과를 누적(최종 에러 메시지에 전부 표시)
+
   for(const op of candidates){
     // 인증키는 이미 인코딩된 값이므로 문자열로 그대로 연결합니다.
     // data.go.kr 표준 파라미터는 _type 하나만 사용합니다(중복 파라미터는 게이트웨이에서
-    // 오히려 400 오류의 원인이 될 수 있어 제거).
+    // 오히려 400/파싱오류의 원인이 될 수 있어 제거).
     const requestUrl = `${MOUNTAIN_API_ENDPOINT}${op}` +
       `?serviceKey=${MOUNTAIN_API_KEY}&pageNo=1&numOfRows=100&_type=json`;
     let text = "";
@@ -528,7 +530,7 @@ async function fetchTop100Mountains(){
 
       if(!res.ok){
         const serverMsg = extractServerMessage(text);
-        lastErr = new Error(`HTTP ${res.status} (${op || "루트"})${serverMsg ? " — 서버 메시지: " + serverMsg : ""}`);
+        attemptLogs.push(`"${op || "(루트)"}" → HTTP ${res.status}${serverMsg ? " / " + serverMsg : ""}`);
         continue;
       }
       const items = parseApiResponse(text);
@@ -536,16 +538,15 @@ async function fetchTop100Mountains(){
         localStorage.setItem("top100ApiOperation", op);
         return items;
       }
-      lastErr = new Error(`응답은 정상이지만 목록이 비어 있음 (${op || "루트"})` +
-        (extractServerMessage(text) ? " — " + extractServerMessage(text) : ""));
+      attemptLogs.push(`"${op || "(루트)"}" → 정상 응답이지만 목록 0건${extractServerMessage(text) ? " / " + extractServerMessage(text) : ""}`);
     }catch(err){
-      // parseApiResponse가 던진 오류(resultCode 오류 포함) 등
+      // JSON.parse 실패, resultCode 오류(parseApiResponse가 던진 것) 등
       const serverMsg = extractServerMessage(text);
-      lastErr = new Error(`${op || "루트"}: ${err.message}${serverMsg && !err.message.includes(serverMsg) ? " — " + serverMsg : ""}`);
+      attemptLogs.push(`"${op || "(루트)"}" → ${err.message}${serverMsg ? " / " + serverMsg : ""}`);
     }
   }
-  throw new Error("모든 오퍼레이션 경로 시도 실패. 마지막 오류: " + (lastErr ? lastErr.message : "원인 불명") +
-    " — 아래 콘솔 로그의 실제 응답 본문을 확인해주세요.");
+  console.log("[100대명산 API] 전체 시도 요약:", attemptLogs);
+  throw new Error("모든 오퍼레이션 경로 시도 실패.\n" + attemptLogs.join("\n"));
 }
 
 // 응답 본문이 JSON인지 XML인지 자동 판별해 item 배열로 변환

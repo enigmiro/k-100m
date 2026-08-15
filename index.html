@@ -556,7 +556,7 @@ function parseApiResponse(text){
     const json = JSON.parse(trimmed);
     // resultCode가 실패면 오류로 처리
     const header = json?.response?.header ?? json?.header;
-    if(header?.resultCode && !["00","0000"].includes(String(header.resultCode))){
+    if(header?.resultCode && !["00","0000","0"].includes(String(header.resultCode))){
       throw new Error(`API 오류(${header.resultCode}): ${header.resultMsg || ""}`);
     }
     const body = json?.response?.body ?? json?.body ?? json;

@@ -481,6 +481,32 @@ function pick(obj, keys){
   return "";
 }
 
+// data.go.kr 게이트웨이는 인증키 미승인/오퍼레이션명 오류 등의 경우에도
+// HTTP 상태코드만으로는 원인을 알 수 없고, 응답 본문(XML 또는 JSON)에
+// resultCode/resultMsg(또는 returnAuthMsg 등)로 실제 사유를 담아 줍니다.
+// 그래서 res.ok 여부와 무관하게 항상 본문을 읽어 메시지를 뽑아냅니다.
+function extractServerMessage(text){
+  const trimmed = (text || "").trim();
+  if(!trimmed) return "";
+  try{
+    if(trimmed.startsWith("{") || trimmed.startsWith("[")){
+      const json = JSON.parse(trimmed);
+      const header = json?.response?.header ?? json?.header ?? json;
+      const code = header?.resultCode ?? header?.returnReasonCode;
+      const msg = header?.resultMsg ?? header?.returnAuthMsg ?? header?.errMsg;
+      if(code || msg) return `[${code ?? "?"}] ${msg ?? ""}`.trim();
+    }else{
+      const xml = new DOMParser().parseFromString(trimmed, "application/xml");
+      if(!xml.querySelector("parsererror")){
+        const code = xml.querySelector("resultCode, returnReasonCode")?.textContent;
+        const msg = xml.querySelector("resultMsg, returnAuthMsg, errMsg")?.textContent;
+        if(code || msg) return `[${code ?? "?"}] ${msg ?? ""}`.trim();
+      }
+    }
+  }catch(e){ /* 파싱 실패 시 아래에서 원문 일부를 그대로 노출 */ }
+  return trimmed.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+}
+
 async function fetchTop100Mountains(){
   const savedOp = localStorage.getItem("top100ApiOperation");
   const candidates = savedOp != null
@@ -490,25 +516,36 @@ async function fetchTop100Mountains(){
   let lastErr = null;
   for(const op of candidates){
     // 인증키는 이미 인코딩된 값이므로 문자열로 그대로 연결합니다.
+    // data.go.kr 표준 파라미터는 _type 하나만 사용합니다(중복 파라미터는 게이트웨이에서
+    // 오히려 400 오류의 원인이 될 수 있어 제거).
     const requestUrl = `${MOUNTAIN_API_ENDPOINT}${op}` +
-      `?serviceKey=${MOUNTAIN_API_KEY}&pageNo=1&numOfRows=200&type=json&_type=json`;
+      `?serviceKey=${MOUNTAIN_API_KEY}&pageNo=1&numOfRows=100&_type=json`;
+    let text = "";
     try{
       const res = await fetch(requestUrl);
-      if(!res.ok){ lastErr = new Error(`HTTP ${res.status} (${op || "루트"})`); continue; }
-      const text = await res.text();
-      console.log(`[100대명산 API] 시도 경로: "${op}" / 응답 앞 300자:`, text.slice(0, 300));
+      text = await res.text();
+      console.log(`[100대명산 API] 시도 경로: "${op}" / HTTP ${res.status} / 응답 앞 400자:`, text.slice(0, 400));
+
+      if(!res.ok){
+        const serverMsg = extractServerMessage(text);
+        lastErr = new Error(`HTTP ${res.status} (${op || "루트"})${serverMsg ? " — 서버 메시지: " + serverMsg : ""}`);
+        continue;
+      }
       const items = parseApiResponse(text);
       if(items.length > 0){
         localStorage.setItem("top100ApiOperation", op);
         return items;
       }
-      lastErr = new Error(`응답은 정상이지만 목록이 비어 있음 (${op || "루트"})`);
+      lastErr = new Error(`응답은 정상이지만 목록이 비어 있음 (${op || "루트"})` +
+        (extractServerMessage(text) ? " — " + extractServerMessage(text) : ""));
     }catch(err){
-      lastErr = err;
+      // parseApiResponse가 던진 오류(resultCode 오류 포함) 등
+      const serverMsg = extractServerMessage(text);
+      lastErr = new Error(`${op || "루트"}: ${err.message}${serverMsg && !err.message.includes(serverMsg) ? " — " + serverMsg : ""}`);
     }
   }
-  throw new Error("모든 오퍼레이션 경로 시도 실패: " + (lastErr ? lastErr.message : "원인 불명") +
-    " — data.go.kr 활용명세(Swagger)에서 정확한 오퍼레이션명을 확인해 OPERATION_CANDIDATES에 추가해주세요.");
+  throw new Error("모든 오퍼레이션 경로 시도 실패. 마지막 오류: " + (lastErr ? lastErr.message : "원인 불명") +
+    " — 아래 콘솔 로그의 실제 응답 본문을 확인해주세요.");
 }
 
 // 응답 본문이 JSON인지 XML인지 자동 판별해 item 배열로 변환
